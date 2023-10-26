@@ -109,7 +109,7 @@ class Meter:
             self.metrics["nawifi_status"].labels(name=name, id=id).set(p["wifi_status"])
             self.metrics["nareachable"].labels(name=name, id=id).set(p["reachable"])
 
-            if not 'dashboard_data' in p:
+            if 'dashboard_data' in p:
                 d = p["dashboard_data"]
 
                 self.metrics["nahumidity"].labels(name=name, id=id).set(d["Humidity"])
