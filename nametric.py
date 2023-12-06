@@ -175,7 +175,7 @@ class Meter:
                     )
 
     def get_netatmo_token(self) -> Token:
-        if self.token and self.token["expire_at"] < time.time():
+        if self.token and self.token["expire_at"] > time.time():
             return self.token
 
         t = time.time()
