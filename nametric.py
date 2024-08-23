@@ -8,15 +8,19 @@ import typing
 import time
 import logging
 import logging.handlers
+import dbm
 
 logger = logging.getLogger()
 Gauge = prometheus_client.Gauge
+
+Database: typing.TypeAlias = "dbm._Database"
 
 
 class Token(typing.TypedDict):
     expire_at: float
     expire_in: float
     access_token: str
+    refresh_token: str
 
 
 class Metrics(typing.TypedDict):
@@ -39,12 +43,16 @@ class Metrics(typing.TypedDict):
     nawindstrength: Gauge
     nawindangle: Gauge
 
+
 class Meter:
     token: typing.Union[Token, None] = None
+    db: Database
 
     def __init__(self) -> None:
         with open("config.yaml") as f:
             self.naconfig = yaml.safe_load(f)
+
+        self.db = dbm.open("nametric.db", "c")
 
         self.get_netatmo_token()
 
@@ -117,7 +125,11 @@ class Meter:
 
         data = r.json()
         for p in data["body"]["devices"]:
-            name = p["module_name"]
+
+            name = "Some module"
+            if not "module_name" in p and "id" in p:
+                name = "Id" + p["_id"]
+
             id = p["_id"]
             self.metrics["nalast_seen"].labels(name=name, id=id).set(
                 p["last_status_store"]
@@ -180,9 +192,23 @@ class Meter:
 
         t = time.time()
 
+        configtoken = self.naconfig["refreshtoken"]
+        refreshtoken = configtoken
+
+        if b"token" in self.db.keys():
+            dbtoken = self.db["token"]
+
+            if not isinstance(dbtoken, bytes):
+                dbtoken = dbtoken.encode("ascii")
+
+            old, new = dbtoken.split(b"\x00")
+
+            if old == refreshtoken.encode("ascii"):
+                refreshtoken = new.decode()
+
         d = {
             "grant_type": "refresh_token",
-            "refresh_token": self.naconfig["refreshtoken"],
+            "refresh_token": refreshtoken,
             "client_id": self.naconfig["clientid"],
             "client_secret": self.naconfig["clientsecret"],
         }
@@ -200,6 +226,13 @@ class Meter:
             raise SystemError("Failed to refresh token")
 
         token: Token = r.json()
+
+        self.db[b"token"] = (
+            configtoken.encode("ascii")
+            + b"\x00"
+            + token["refresh_token"].encode("ascii")
+        )
+
         token["expire_at"] = t + token["expire_in"]
 
         self.token = token
