@@ -117,7 +117,11 @@ class Meter:
 
         data = r.json()
         for p in data["body"]["devices"]:
-            name = p["module_name"]
+
+            name = "Some module"
+            if not "module_name" in p and "id" in p:
+                name = "Id" + p["_id"]
+
             id = p["_id"]
             self.metrics["nalast_seen"].labels(name=name, id=id).set(
                 p["last_status_store"]
